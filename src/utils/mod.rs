@@ -1,0 +1,1 @@
+// This file provides utility functions that can be used across different solutions, such as input parsing or common calculations.

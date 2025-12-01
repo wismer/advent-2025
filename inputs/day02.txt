@@ -1,0 +1,1 @@
+The contents of the file /advent-of-code-rust/advent-of-code-rust/inputs/day02.txt will be intentionally left blank.

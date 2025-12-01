@@ -1,0 +1,16 @@
+[package]
+name = "advent-of-code-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Add any dependencies needed for your solutions here
+
+[dev-dependencies]
+# Add any development dependencies here, such as testing libraries or benchmarking tools
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
