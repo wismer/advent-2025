@@ -1,9 +1,9 @@
-pub fn solve_part_one(data: &str) -> i32 {
+pub fn solve_part_one(data: &str) -> usize {
     // Implement the logic for part one of the puzzle here
     0
 }
 
-pub fn solve_part_two(data: &str) -> i32 {
+pub fn solve_part_two(data: &str) -> usize {
     // Implement the logic for part two of the puzzle here
     0
 }

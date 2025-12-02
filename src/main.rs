@@ -18,7 +18,7 @@ fn main() -> Result<(), std::io::Error> {
     let input_file = format!("inputs/{}.txt", day_arg.as_str());
     let input_data = fs::read_to_string(&input_file)?;
 
-    let result = match (day_arg.as_str(), part_arg.as_str()) {
+    let result: usize = match (day_arg.as_str(), part_arg.as_str()) {
         ("day1", "p1") => solutions::day01::solve_part_one(&input_data),
         ("day1", _) => solutions::day01::solve_part_two(&input_data),
         ("day2", "p1") => solutions::day02::solve_part_one(&input_data),

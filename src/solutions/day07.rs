@@ -1,8 +1,8 @@
-pub fn solve_part_one(data: &str) -> i32 {
+pub fn solve_part_one(data: &str) -> usize {
     0
 }
 
-pub fn solve_part_two(data: &str) -> i32 {
+pub fn solve_part_two(data: &str) -> usize {
     0
 }
 

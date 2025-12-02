@@ -1,12 +1,12 @@
 // This file contains the solution for Day 01 of the Advent of Code challenge, including functions to read input and compute results.
 
-fn parse_line(line: &str) -> (char, i32) {
+fn parse_line(line: &str) -> (char, usize) {
     let (turn, dist) = line.split_at(1);
-    let distance: i32 = dist.parse().unwrap();
+    let distance: usize = dist.parse().unwrap();
     (turn.chars().next().unwrap(), distance)
 }
 
-pub fn solve_part_one(data: &str) -> i32 {
+pub fn solve_part_one(data: &str) -> usize {
     // 0 - 99 valid locations
     let instructions = data.lines();
     let mut count = 0;
@@ -18,12 +18,12 @@ pub fn solve_part_one(data: &str) -> i32 {
         if dir == 'R' {
             position = (modulo + position) % 100;
         } else {
-            let diff = position - modulo;
-            if diff < 0 {
-                position = 100 - i32::abs(diff);
+            let diff = if position > modulo {
+                position - modulo
             } else {
-                position = diff;
-            }
+                modulo - position
+            };
+            position = diff;
         }
 
         if position == 0 {
@@ -34,7 +34,7 @@ pub fn solve_part_one(data: &str) -> i32 {
     count
 }
 
-pub fn solve_part_two(data: &str) -> i32 {
+pub fn solve_part_two(data: &str) -> usize {
     let instructions = data.lines();
     let mut count = 0;
     let mut position = 50;
