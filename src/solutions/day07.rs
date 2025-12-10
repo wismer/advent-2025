@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 fn parse_input(data: &str) -> Tree {
     let tree_parts: Vec<Vec<TreePart>> = data.lines().map(|line| {
@@ -18,6 +18,39 @@ fn parse_input(data: &str) -> Tree {
 }
 
 impl Tree {
+    fn all_paths(&self) -> usize {
+        let mut visited: HashMap<(usize, usize), usize> = HashMap::new();
+        let mut total = 0;
+        visited.insert((0, (self.size / 2) - 1), 1);
+        while !visited.is_empty() {
+            let mut next = HashMap::new();
+            for ((x, y), count) in visited {
+                if x >= self.size {
+                    total += count;
+                    continue;
+                }
+                match self.get_next_part((x, y)) {
+
+                    Some(part) => {
+                        match part {
+                            TreePart::Tachyon => {
+                                *next.entry((x + 1, y - 1)).or_default() += count;
+                                *next.entry((x + 1, y + 1)).or_default() += count;
+                            },
+                            TreePart::None | TreePart::Start => {
+                                *next.entry((x + 1, y)).or_default() += count;
+                            },
+                            _ => {}
+                        }
+                    },
+                    None => {}
+                }
+            }
+            visited = next;
+        }
+
+        total
+    }
 
     fn get_next_part(&self, coord: (usize, usize)) -> Option<&TreePart> {
         match self.tree.get(coord.0) {
@@ -38,7 +71,6 @@ impl Tree {
             let coords: Vec<(usize, usize)> = self.beams.drain(..).collect();
             let mut new_beams: Vec<(usize, usize)> = vec![];
             for coord in coords {
-                // println!("coord; {:?}", coord);
                 match self.get_next_part((coord.0 + 1, coord.1)) {
                     Some(part) => {
                         match part {
@@ -72,12 +104,10 @@ impl Tree {
             }
             self.beams.append(&mut new_beams);
             for beam in self.beams.iter() {
-                // println!("beam: {:?}", beam);
                 self.tree[beam.0][beam.1] = TreePart::Beam;
             }
         }
 
-        println!("split: {split_count:?}");
         split_count
     }
 }
@@ -97,11 +127,10 @@ pub fn solve_part_one(data: &str) -> usize {
 pub fn solve_part_two(data: &str) -> usize {
     // factor in the overlaps
     let mut total = 0;
-    let mut tree = parse_input(data);
-    for _ in 0..tree.size {
-        total += tree.move_beams();
-        println!("{tree:?}");
-    }
+    let tree = parse_input(data);
+    total = tree.all_paths();
+
+    println!("total: {total}");
 
 
     total
