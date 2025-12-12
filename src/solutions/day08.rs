@@ -1,11 +1,11 @@
 use core::f64;
 use std::{collections::{HashMap, HashSet}, fmt::Debug};
 
-#[derive(Debug, Clone, Copy, Hash, Eq)]
+#[derive(Debug, Clone, Copy)]
 struct Point {
-    x: usize,
-    y: usize,
-    z: usize,
+    x: f64,
+    y: f64,
+    z: f64,
     name: char
 }
 struct Circuit {
@@ -29,90 +29,195 @@ impl Debug for Circuit {
     }
 }
 
+impl Debug for JunctionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buff = String::new();
+        for r in self.boxes.iter() {
+            for n in r.iter().map(|f| (f.x, f.y, f.z)) {
+                let s = format!("{n:?},");
+                buff.push_str(&s);
+            }
+            buff.push('\n');
+        }
+
+        write!(f, "{}", buff)
+    }
+}
+
 impl Point {
-    fn distance_to(&self, other: &Point) -> usize {
-        let x = self.x.abs_diff(other.x);
-        let y = self.y.abs_diff(other.y);
-        let z = self.z.abs_diff(other.z);
+    fn distance_to(&self, other: &Point) -> f64 {
+        let x = self.x - other.x;
+        let y = self.y - other.y;
+        let z = self.z - other.z;
         f64::sqrt(
             ((x * x) + (y * y) + (z * z)) as f64
-        ) as usize
+        )
     }
 }
 
-impl Circuit {
-    fn contains(&self, point: &Point) -> bool {
-        self.points.contains(point)
+// impl Circuit {
+//     fn contains(&self, point: &Point) -> bool {
+//         self.points.contains(point)
+//     }
+
+//     fn size(&self) -> usize {
+//         self.points.len()
+//     }
+
+//     fn connect(&mut self, other: Point) {
+//         self.points.insert(other);
+//     }
+// }
+
+struct JunctionSet {
+    boxes: Vec<Vec<Point>>
+}
+
+impl JunctionSet {
+    fn contains(&self, pt_a: &Point, pt_b: &Point) -> (Option<usize>, Option<usize>) {
+        for (i, b) in self.boxes.iter().enumerate() {
+            if b.contains(pt_a) && b.contains(pt_b) {
+                return (Some(i), Some(i))
+            } else if b.contains(pt_a) {
+                return (Some(i), None)
+            } else if b.contains(pt_b) {
+                return (None, Some(i))
+            }
+        }
+
+        (None, None)
     }
 
-    fn size(&self) -> usize {
-        self.points.len()
-    }
-
-    fn connect(&mut self, other: Point) {
-        self.points.insert(other);
+    fn push(&mut self, pts: Vec<Point>) {
+        self.boxes.push(pts);
     }
 }
 
 
-
-fn parse_input(data: &str) -> (HashMap<(Point, Point), usize>, usize) {
+fn parse_input(data: &str) -> (HashMap<Point, (Point, usize)>, usize) {
     let mut points: Vec<Point> = vec![];
-    let a: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string().chars().collect();
-    let coordinates: Vec<_> = data.lines().enumerate().collect();
-    for (i, line) in coordinates.iter() {
-        let pts: Vec<usize> = line
+    let alpha: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let coordinates: Vec<_> = data.lines().collect();
+    for (i, line) in coordinates.iter().enumerate() {
+        let pts: Vec<f64> = line
             .split(",")
             .map(|n| n.parse().unwrap())
             .collect();
 
-        points.push(Point { x: pts[0], y: pts[1], z: pts[2], name: 's' });
-
-        // points.push(Circuit { points: vec![Point { x: pts[0], y: pts[1], z: pts[2] }] });
+        points.push(Point { x: pts[0], y: pts[1], z: pts[2], name: alpha[i] });
     }
-    let mut hm: HashMap<(Point, Point), usize> = HashMap::new();
-    let mut distances_by_points: Vec<(usize, Point, Point)> = vec![];
+
+    let mut hm: HashMap<Point, (Point, usize)> = HashMap::new();
     let copy = points.clone();
-
-    for i in 0..points.len() {
-        let pt = copy[i];
-
-        for p in points.iter() {
-            if pt.x == p.x && pt.y == p.y && pt.z == p.z {
+    let mut x: Vec<Vec<(f64, Point, Point)>> = vec![];
+    for (copy_idx, pt_a) in copy.iter().enumerate() {
+        let mut ns: Vec<(f64, Point, Point)> = vec![];
+        for (idx, pt_b) in points.iter().enumerate() {
+            if copy_idx == idx {
                 continue;
             }
-            let distance = pt.distance_to(&p);
-            let pt_a = Point { x: pt.x, y: pt.y, z: pt.z, name: pt.name };
-            let pt_b = Point { x: p.x, y: p.y, z: p.z, name: p.name };
-            let already_here = hm.contains_key(&(pt_b, pt_a));
-
-            // println!("{pt_a:?} -> {pt_b:?} ({distance})");
-            if already_here {
+            let distance = pt_a.distance_to(pt_b);
+            let x_distance = pt_b.distance_to(pt_a);
+            let dup = x.iter().any(|i| {
+                i[0] == (distance, *pt_b, *pt_a)
+            });
+            if dup {
+                println!("dup found A: {:?} B: {:?}", pt_a, pt_b);
                 continue;
             }
 
-            match hm.get_mut(&(pt_a, pt_b)) {
-                Some(v) => {
-                    if distance < *v {
-                        // println!("replacing {:?} with {:?}", v, (distance, pt_b));
-                        *v = distance;
-                    } else {
-                    }
-                },
-                None => {
-                    hm.insert((pt_a, pt_b), distance);
-                }
-            }
-
-            distances_by_points.push((distance, Point { x: pt.x, y: pt.y, z: pt.z, name: pt.name }, Point { x: p.x, y: p.y, z: p.z, name: p.name }));            
+            ns.push((distance, *pt_a, *pt_b));
+            // match hm.get_mut(pt_a) {
+            //     Some(p) => {
+            //         if p.1 > distance {
+            //             *p = (*pt_b, distance);
+            //         }
+            //     },
+            //     None => {
+            //         hm.insert(*pt_a, (*pt_b, distance));
+            //     }
+            // }
         }
+        ns.sort_by(|a,b| a.0.total_cmp(&b.0));
+        x.push(ns);
     }
-    for key in hm.keys() {
-        // println!("key: {key:?} value: {:?}", hm.get(key).unwrap());
+    x.sort_by(|a,b| {
+        a[0].0.total_cmp(&b[0].0)
+    });
+    for s in x.iter() {
+        println!("{:?}", s[0]);
     }
-    // distances_by_points.sort_by(|a,b| a.0.cmp(&b.0));
-    // println!("{:?}", hm);
+    let mut list: Vec<(&Point, &(Point, usize))> = hm.iter().map(|(k, v)| {
+        (k, v)
+    }).collect();
 
+    list.sort_by(|a,b| {
+        a.1.1.cmp(&b.1.1)
+    });
+    // println!("size: {}", list.len());
+    for l in list.iter() {
+        println!("{l:?}");
+    }
+
+    
+    // if k1 exists as a value in v2, and k2 exists as a value in v1
+    // then that is a joined pair
+    let mut ptr: Point = Point { x: 1.0, y: 1.0, z: 1.0, name: 'a' };
+    let mut juncs = JunctionSet { boxes: vec![] };
+    let mut limit = 20;
+    for (k, v) in list.iter() {
+        if v.0 == ptr {
+            println!("{k:?}");
+            continue;
+        }
+        // two rules:
+        // if a's closest neighbor is b, and b's closest neighbor is a, then that is a pair
+        // if a's closest neighbor belongs in a pair, then it connects to that pair
+        // match hm.get(&v.0) {
+        //     Some(p) => {
+        //         if p.0 == **k {
+        //             println!("SAME: {v:?} -> {k:?}");
+        //         } else {
+        //             println!("{:?} {v:?}", k);
+        //         }
+        //     },
+        //     None => {
+        //         println!("{:?} {v:?}", k);
+        //     }
+        // }
+
+        match (juncs.contains(k, &v.0)) {
+            (None, Some(i)) => {
+                match juncs.boxes.get_mut(i) {
+                    Some(r) => {
+                        limit -= 1;
+                        r.push(**k);
+                    },
+                    None => {}
+                }
+            },
+            (Some(i), None) => {
+                match juncs.boxes.get_mut(i) {
+                    Some(r) => {
+                        limit -= 1;
+                        r.push(v.0);
+                    },
+                    None => {}
+                }
+            },
+            (None, None) => {
+                limit -= 1;
+                let c: Vec<Point> = vec![v.0, **k];
+                juncs.push(c);
+            },
+            _ => {}
+        }
+
+
+        ptr = **k;
+    }
+
+    println!("{juncs:?} {limit}");
     (hm, coordinates.len())
 }
 
@@ -120,82 +225,7 @@ pub fn solve_part_one(data: &str) -> usize {
     let (mut pts, size) = parse_input(data);
     let mut total = 1;
     let mut min = f64::MAX;
-    let mut circuits: Vec<Circuit> = vec![];
-    // println!("{:?}", &pts[..10]);
-    // start with shortest distance first
-    let mut ks: Vec<_> = pts.keys().collect();
-    let mut keys: Vec<_> = ks.iter().map(|k| {
-        let v = pts.get(k).unwrap();
-        (v, k)
-    }).collect();
-    keys.sort_by(|a,b| a.0.cmp(&b.0));
-    let mut pairs_made = 0;
-    for (d, k) in keys {
 
-        if pairs_made > (size / 2) {
-            println!("{:?}, ", k);
-            break;
-        }
-        
-        
-        
-        match pts.get(k) {
-            Some(v) => {
-                println!("attempting getting {k:?} -> {v:?} -> ");
-                let circuit_contains_point = circuits.iter_mut().find(|c| c.contains(&k.0) || c.contains(&k.1));
-                match circuit_contains_point {
-                    Some(c) => {
-                        match (c.contains(&k.0), c.contains(&k.1)) {
-                            (true, false) => {
-                                pairs_made += 1;
-                                c.connect(k.1);
-                            },
-                            (false, true) => {
-                                pairs_made += 1;
-                                c.connect(k.0);
-                            },
-                            _ => {}
-                        }
-                    },
-                    None => {
-                        pairs_made += 1;
-                        println!("connections made: {pairs_made}");
-                        let mut points = HashSet::new();
-                        points.insert(k.0);
-                        points.insert(k.1);
-                        let circut = Circuit { points };
-                        circuits.push(circut);
-                    }
-                }
-            },
-            None => {}
-        }
-    }
-
-    circuits.sort_by(|a,b| a.size().cmp(&b.size()));
-    circuits.reverse();
-    for c in circuits.iter().take(3) {
-        println!("{}", c.size());
-        if c.size() > 0 {
-            total *= c.size();
-        }
-    }
-    // values.sort_by(|a,b| a.0.cmp(&b.0));
-    // for v in values {
-    //     match pts.get(v.1) {
-    //         Some()
-    //     }
-    // }
-    // for (pt_a, (d, pt_b)) in pts {
-    //     for circuit in circuits.iter_mut() {
-    //         if circuit.contains(&pt_b) {
-    //             circuit.connect(pt_a);
-    //         }
-    //         continue;
-    //     }
-    // }
-    
-    // println!("circuits {:?}", circuits);
     total
 
 }
