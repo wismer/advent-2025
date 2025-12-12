@@ -1,14 +1,21 @@
 use core::f64;
-use std::fmt::Debug;
+use std::{collections::{HashMap, HashSet}, fmt::Debug};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, Eq)]
 struct Point {
-    x: f64,
-    y: f64,
-    z: f64
+    x: usize,
+    y: usize,
+    z: usize,
+    name: char
 }
 struct Circuit {
-    points: Vec<Point>
+    points: HashSet<Point>
+}
+
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        self.x == other.x && self.y == other.y && self.z == other.z
+    }
 }
 
 impl Debug for Circuit {
@@ -23,112 +30,173 @@ impl Debug for Circuit {
 }
 
 impl Point {
-    fn distance_to(&self, other: &Point) -> f64 {
-        let x = self.x - other.x;
-        let y = self.y - other.y;
-        let z = self.z - other.z;
+    fn distance_to(&self, other: &Point) -> usize {
+        let x = self.x.abs_diff(other.x);
+        let y = self.y.abs_diff(other.y);
+        let z = self.z.abs_diff(other.z);
         f64::sqrt(
-            (x * x) + (y * y) + (z * z)
-        )
+            ((x * x) + (y * y) + (z * z)) as f64
+        ) as usize
     }
 }
 
 impl Circuit {
-    fn shortest(&self, point: &Point) -> f64 {
-        let mut min = f64::MAX;
-        for pt in self.points.iter() {
-            let distance = pt.distance_to(point);
-            if distance < min {
-                min = distance;
-            }
-        }
+    fn contains(&self, point: &Point) -> bool {
+        self.points.contains(point)
+    }
 
-        min
+    fn size(&self) -> usize {
+        self.points.len()
     }
 
     fn connect(&mut self, other: Point) {
-        self.points.push(other);
+        self.points.insert(other);
     }
 }
 
 
 
-fn parse_input(data: &str) -> Vec<Point> {
-    let mut circuits: Vec<Point> = vec![];
-
-    for line in data.lines() {
-        let pts: Vec<f64> = line
+fn parse_input(data: &str) -> (HashMap<(Point, Point), usize>, usize) {
+    let mut points: Vec<Point> = vec![];
+    let a: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string().chars().collect();
+    let coordinates: Vec<_> = data.lines().enumerate().collect();
+    for (i, line) in coordinates.iter() {
+        let pts: Vec<usize> = line
             .split(",")
             .map(|n| n.parse().unwrap())
             .collect();
 
-        circuits.push(Point { x: pts[0], y: pts[1], z: pts[2] });
+        points.push(Point { x: pts[0], y: pts[1], z: pts[2], name: 's' });
 
-        // circuits.push(Circuit { points: vec![Point { x: pts[0], y: pts[1], z: pts[2] }] });
+        // points.push(Circuit { points: vec![Point { x: pts[0], y: pts[1], z: pts[2] }] });
     }
+    let mut hm: HashMap<(Point, Point), usize> = HashMap::new();
+    let mut distances_by_points: Vec<(usize, Point, Point)> = vec![];
+    let copy = points.clone();
 
-    circuits
+    for i in 0..points.len() {
+        let pt = copy[i];
+
+        for p in points.iter() {
+            if pt.x == p.x && pt.y == p.y && pt.z == p.z {
+                continue;
+            }
+            let distance = pt.distance_to(&p);
+            let pt_a = Point { x: pt.x, y: pt.y, z: pt.z, name: pt.name };
+            let pt_b = Point { x: p.x, y: p.y, z: p.z, name: p.name };
+            let already_here = hm.contains_key(&(pt_b, pt_a));
+
+            // println!("{pt_a:?} -> {pt_b:?} ({distance})");
+            if already_here {
+                continue;
+            }
+
+            match hm.get_mut(&(pt_a, pt_b)) {
+                Some(v) => {
+                    if distance < *v {
+                        // println!("replacing {:?} with {:?}", v, (distance, pt_b));
+                        *v = distance;
+                    } else {
+                    }
+                },
+                None => {
+                    hm.insert((pt_a, pt_b), distance);
+                }
+            }
+
+            distances_by_points.push((distance, Point { x: pt.x, y: pt.y, z: pt.z, name: pt.name }, Point { x: p.x, y: p.y, z: p.z, name: p.name }));            
+        }
+    }
+    for key in hm.keys() {
+        // println!("key: {key:?} value: {:?}", hm.get(key).unwrap());
+    }
+    // distances_by_points.sort_by(|a,b| a.0.cmp(&b.0));
+    // println!("{:?}", hm);
+
+    (hm, coordinates.len())
 }
 
 pub fn solve_part_one(data: &str) -> usize {
-    let mut pts = parse_input(data);
-    let mut idx = 0;
+    let (mut pts, size) = parse_input(data);
+    let mut total = 1;
     let mut min = f64::MAX;
     let mut circuits: Vec<Circuit> = vec![];
+    // println!("{:?}", &pts[..10]);
+    // start with shortest distance first
+    let mut ks: Vec<_> = pts.keys().collect();
+    let mut keys: Vec<_> = ks.iter().map(|k| {
+        let v = pts.get(k).unwrap();
+        (v, k)
+    }).collect();
+    keys.sort_by(|a,b| a.0.cmp(&b.0));
+    let mut pairs_made = 0;
+    for (d, k) in keys {
 
-    while let Some(pt) = pts.pop() {
-        let mut circuit = Circuit { points: vec![] };
-        // check first with remaining pts for closest distance
-
-        let closest_pt = pts
-            .iter()
-            .map(|p| p.distance_to(&pt))
-            .enumerate()
-            .min_by_key(|p| p.1 as usize);
-        let closest_circuit = circuits
-            .iter()
-            .map(|c| c.shortest(&pt))
-            .enumerate()
-            .min_by_key(|c| c.1 as usize);
-
-        match (closest_circuit, closest_pt) {
-            (Some(c), Some(p)) => {
-                if c.1 < p.1 {
-                    // an existing circuit has a closer pt than the remaining ungrouped pts
-                    let mut closest_circuit = circuits.get_mut(c.0).unwrap();
-                    closest_circuit.connect(pt);
-                } else {
-                    // a unpopped pt is closer to the pt
-                    let removed_point = pts.remove(p.0);
-                    circuit.connect(removed_point);
-                    circuit.connect(pt);
+        if pairs_made > (size / 2) {
+            println!("{:?}, ", k);
+            break;
+        }
+        
+        
+        
+        match pts.get(k) {
+            Some(v) => {
+                println!("attempting getting {k:?} -> {v:?} -> ");
+                let circuit_contains_point = circuits.iter_mut().find(|c| c.contains(&k.0) || c.contains(&k.1));
+                match circuit_contains_point {
+                    Some(c) => {
+                        match (c.contains(&k.0), c.contains(&k.1)) {
+                            (true, false) => {
+                                pairs_made += 1;
+                                c.connect(k.1);
+                            },
+                            (false, true) => {
+                                pairs_made += 1;
+                                c.connect(k.0);
+                            },
+                            _ => {}
+                        }
+                    },
+                    None => {
+                        pairs_made += 1;
+                        println!("connections made: {pairs_made}");
+                        let mut points = HashSet::new();
+                        points.insert(k.0);
+                        points.insert(k.1);
+                        let circut = Circuit { points };
+                        circuits.push(circut);
+                    }
                 }
             },
-            (Some(c), None) => {
-                let mut closest_circuit = circuits.get_mut(c.0).unwrap();
-                closest_circuit.connect(pt);
-            },
-            (None, Some(p)) => {
-                let removed_point = pts.remove(p.0);
-                circuit.connect(removed_point);
-                circuit.connect(pt);
-            }
+            None => {}
         }
-
-
-        match closest_pt {
-            Some(p) => {
-                let removed_pt = pts.remove(p.0);
-                circuit.connect(pt);
-                circuit.connect(removed_pt);
-                circuits.push(circuit);
-            },
-            None => break
-        }
-
     }
-    println!("circuits: {circuits:?}");
-    0
+
+    circuits.sort_by(|a,b| a.size().cmp(&b.size()));
+    circuits.reverse();
+    for c in circuits.iter().take(3) {
+        println!("{}", c.size());
+        if c.size() > 0 {
+            total *= c.size();
+        }
+    }
+    // values.sort_by(|a,b| a.0.cmp(&b.0));
+    // for v in values {
+    //     match pts.get(v.1) {
+    //         Some()
+    //     }
+    // }
+    // for (pt_a, (d, pt_b)) in pts {
+    //     for circuit in circuits.iter_mut() {
+    //         if circuit.contains(&pt_b) {
+    //             circuit.connect(pt_a);
+    //         }
+    //         continue;
+    //     }
+    // }
+    
+    // println!("circuits {:?}", circuits);
+    total
 
 }
 
