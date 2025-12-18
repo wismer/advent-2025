@@ -1,46 +1,23 @@
 use core::f64;
-use std::{collections::{HashMap, HashSet}, fmt::Debug};
+use std::fmt::Debug;
 
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Clone, Copy)]
 struct Point {
     x: f64,
     y: f64,
     z: f64,
-    name: char
 }
-struct Circuit {
-    points: HashSet<Point>
+
+impl Debug for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
 }
 
 impl PartialEq for Point {
     fn eq(&self, other: &Self) -> bool {
         self.x == other.x && self.y == other.y && self.z == other.z
-    }
-}
-
-impl Debug for Circuit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buff = String::new();
-        for pt in self.points.iter() {
-            let s = format!("{:?}\n", &pt);
-            buff.push_str(&s);
-        }
-        write!(f, "\n{}", buff)
-    }
-}
-
-impl Debug for JunctionSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buff = String::new();
-        for r in self.boxes.iter() {
-            for n in r.iter().map(|f| (f.x, f.y, f.z)) {
-                let s = format!("{n:?},");
-                buff.push_str(&s);
-            }
-            buff.push('\n');
-        }
-
-        write!(f, "{}", buff)
     }
 }
 
@@ -50,187 +27,107 @@ impl Point {
         let y = self.y - other.y;
         let z = self.z - other.z;
         f64::sqrt(
-            ((x * x) + (y * y) + (z * z)) as f64
+            x.powf(2.0) +
+            y.powf(2.0) +
+            z.powf(2.0)
         )
     }
 }
 
-// impl Circuit {
-//     fn contains(&self, point: &Point) -> bool {
-//         self.points.contains(point)
-//     }
 
-//     fn size(&self) -> usize {
-//         self.points.len()
-//     }
-
-//     fn connect(&mut self, other: Point) {
-//         self.points.insert(other);
-//     }
-// }
-
-struct JunctionSet {
-    boxes: Vec<Vec<Point>>
-}
-
-impl JunctionSet {
-    fn contains(&self, pt_a: &Point, pt_b: &Point) -> (Option<usize>, Option<usize>) {
-        for (i, b) in self.boxes.iter().enumerate() {
-            if b.contains(pt_a) && b.contains(pt_b) {
-                return (Some(i), Some(i))
-            } else if b.contains(pt_a) {
-                return (Some(i), None)
-            } else if b.contains(pt_b) {
-                return (None, Some(i))
-            }
-        }
-
-        (None, None)
+fn find_circuit(parents: &mut [usize], id: usize) -> usize {
+    // println!("looking for {} - {}", id, parents[id]);
+    if parents[id] != id {
+        parents[id] = find_circuit(parents, parents[id]);
     }
 
-    fn push(&mut self, pts: Vec<Point>) {
-        self.boxes.push(pts);
+    parents[id]
+}
+
+fn union(parents: &mut [usize], a: usize, b: usize) {
+    let a_id = find_circuit(parents, a);
+    let b_id = find_circuit(parents, b);
+
+    if a_id != b_id {
+        parents[b_id] = a_id;
     }
 }
 
-
-fn parse_input(data: &str) -> (HashMap<Point, (Point, usize)>, usize) {
+fn parse_input(data: &str) -> Vec<(usize, usize, f64, Point, Point)> {
     let mut points: Vec<Point> = vec![];
-    let alpha: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
     let coordinates: Vec<_> = data.lines().collect();
-    for (i, line) in coordinates.iter().enumerate() {
+    for (_, line) in coordinates.iter().enumerate() {
         let pts: Vec<f64> = line
             .split(",")
             .map(|n| n.parse().unwrap())
             .collect();
-
-        points.push(Point { x: pts[0], y: pts[1], z: pts[2], name: alpha[i] });
+        points.push(Point { x: pts[0], y: pts[1], z: pts[2] });
     }
-
-    let mut hm: HashMap<Point, (Point, usize)> = HashMap::new();
-    let copy = points.clone();
-    let mut x: Vec<Vec<(f64, Point, Point)>> = vec![];
-    for (copy_idx, pt_a) in copy.iter().enumerate() {
-        let mut ns: Vec<(f64, Point, Point)> = vec![];
-        for (idx, pt_b) in points.iter().enumerate() {
-            if copy_idx == idx {
-                continue;
+    let mut sorted: Vec<(usize, usize, f64, Point, Point)> = vec![];
+    for idx in 0..points.len() {
+        let pt_a = &points[idx];
+        for (i, pt_b) in points.iter().enumerate() {
+            if i == idx {
+                continue
             }
+
+            
             let distance = pt_a.distance_to(pt_b);
-            let x_distance = pt_b.distance_to(pt_a);
-            let dup = x.iter().any(|i| {
-                i[0] == (distance, *pt_b, *pt_a)
-            });
-            if dup {
-                println!("dup found A: {:?} B: {:?}", pt_a, pt_b);
-                continue;
+            if !sorted.contains(&(i, idx, distance, *pt_b, *pt_a)) {
+                sorted.push((idx, i, distance, *pt_a, *pt_b));
             }
-
-            ns.push((distance, *pt_a, *pt_b));
-            // match hm.get_mut(pt_a) {
-            //     Some(p) => {
-            //         if p.1 > distance {
-            //             *p = (*pt_b, distance);
-            //         }
-            //     },
-            //     None => {
-            //         hm.insert(*pt_a, (*pt_b, distance));
-            //     }
-            // }
         }
-        ns.sort_by(|a,b| a.0.total_cmp(&b.0));
-        x.push(ns);
     }
-    x.sort_by(|a,b| {
-        a[0].0.total_cmp(&b[0].0)
-    });
-    for s in x.iter() {
-        println!("{:?}", s[0]);
-    }
-    let mut list: Vec<(&Point, &(Point, usize))> = hm.iter().map(|(k, v)| {
-        (k, v)
-    }).collect();
+    sorted.sort_by(|a,b| a.2.total_cmp(&b.2));
+    sorted
+}
 
-    list.sort_by(|a,b| {
-        a.1.1.cmp(&b.1.1)
-    });
-    // println!("size: {}", list.len());
-    for l in list.iter() {
-        println!("{l:?}");
-    }
-
-    
-    // if k1 exists as a value in v2, and k2 exists as a value in v1
-    // then that is a joined pair
-    let mut ptr: Point = Point { x: 1.0, y: 1.0, z: 1.0, name: 'a' };
-    let mut juncs = JunctionSet { boxes: vec![] };
-    let mut limit = 20;
-    for (k, v) in list.iter() {
-        if v.0 == ptr {
-            println!("{k:?}");
-            continue;
+fn get_root_parent(parents: &[usize], mut idx: usize) -> usize {
+    let mut v: usize = 0;
+    while let Some(n) = parents.get(idx) {
+        if parents[*n] != *n {
+            idx = *n;
+        } else {
+            v = *n;
+            break;
         }
-        // two rules:
-        // if a's closest neighbor is b, and b's closest neighbor is a, then that is a pair
-        // if a's closest neighbor belongs in a pair, then it connects to that pair
-        // match hm.get(&v.0) {
-        //     Some(p) => {
-        //         if p.0 == **k {
-        //             println!("SAME: {v:?} -> {k:?}");
-        //         } else {
-        //             println!("{:?} {v:?}", k);
-        //         }
-        //     },
-        //     None => {
-        //         println!("{:?} {v:?}", k);
-        //     }
-        // }
-
-        match (juncs.contains(k, &v.0)) {
-            (None, Some(i)) => {
-                match juncs.boxes.get_mut(i) {
-                    Some(r) => {
-                        limit -= 1;
-                        r.push(**k);
-                    },
-                    None => {}
-                }
-            },
-            (Some(i), None) => {
-                match juncs.boxes.get_mut(i) {
-                    Some(r) => {
-                        limit -= 1;
-                        r.push(v.0);
-                    },
-                    None => {}
-                }
-            },
-            (None, None) => {
-                limit -= 1;
-                let c: Vec<Point> = vec![v.0, **k];
-                juncs.push(c);
-            },
-            _ => {}
-        }
-
-
-        ptr = **k;
     }
-
-    println!("{juncs:?} {limit}");
-    (hm, coordinates.len())
+    v
 }
 
 pub fn solve_part_one(data: &str) -> usize {
-    let (mut pts, size) = parse_input(data);
-    let mut total = 1;
-    let mut min = f64::MAX;
+    let sorted = parse_input(data);
+    let mut parents: Vec<usize> = (0..sorted.len()).collect();
+    let mut sizes: Vec<usize> = vec![0; sorted.len()];
+    println!("parsed");
+    for (_, (pt_a, pt_b, _, a, b)) in sorted.iter().take(10).enumerate() {
+        union(&mut parents[..], *pt_a, *pt_b);
+    }
+    for idx in 0..sorted.len() {
+        let parent = find_circuit(&mut parents[..], idx);
+        sizes[parent] += 1;
+    }
 
-    total
-
+    sizes.sort();
+    sizes.reverse();
+    sizes.iter().take(3).product()
 }
 
 pub fn solve_part_two(data: &str) -> usize {
+    let line_count = data.lines().count();
+    let sorted = parse_input(data);
+    let mut parents: Vec<usize> = (0..sorted.len()).collect();
+    for (idx, (pt_a, pt_b, _, a, b)) in sorted.iter().enumerate() {
+        union(&mut parents[..], *pt_a, *pt_b);
+        let terminating_num = get_root_parent(&parents, 0);
+        let all_same = &parents[0..line_count].iter().map(|n| {
+            get_root_parent(&parents, *n)
+        }).all(|z| z == terminating_num);
+        if *all_same {
+            return (a.x * b.x) as usize
+        }
+    }
+
     0
 }
 
@@ -265,6 +162,6 @@ mod tests {
 
     #[test]
     fn test_solve_part_two() {
-        assert_eq!(solve_part_two(SAMPLE_DATA), 0);
+        assert_eq!(solve_part_two(SAMPLE_DATA), 25272);
     }
 }
