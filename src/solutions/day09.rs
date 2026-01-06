@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cmp::Ordering, collections::{HashMap, HashSet}, fmt::{Debug, Display}, ops::{Range, RangeInclusive}, usize};
+use std::{cmp::Ordering, collections::{HashMap, HashSet}, fmt::{Debug, Display}, ops::RangeInclusive, usize};
 
 
 struct Grid {
@@ -7,82 +7,35 @@ struct Grid {
     tile_paths: HashSet<(usize, usize)>
 }
 
-struct Point(usize, usize);
-struct Edge {
-    start: Point,
-    end: Point,
+
+impl IntoIterator for Grid {
+    type Item = [(usize, usize); 4];
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let tiles: Vec<&(usize, usize)> = self.tiles.iter().collect();
+        let mut sets: Vec<[(usize, usize); 4]> = vec![];
+        for rx in tiles.iter() {
+            for rs in tiles.iter() {
+                if rx == rs {
+                    continue;
+                }
+                
+                let set: [(usize, usize); 4] = [**rx, (rx.0, rs.1), **rs, (rs.0, rx.1)];
+                sets.push(set);
+            }
+        }
+
+        sets.into_iter()
+    }
 }
 
-impl Point {
-    fn in_between(&self, edge: &Edge) -> bool {
-        let (sx, sy) = (edge.start.0, edge.start.1);
-        let (ex, ey) = (edge.end.0, edge.end.1);
-        
-        // Vertical edge (same x)
-        if sx == ex && self.0 == sx {
-            return self.1 > sy.min(ey) && self.1 < sy.max(ey)
-        }
-        
-        // Horizontal edge (same y)
-        if sy == ey && self.1 == sy {
-            return self.1 > sx.min(ex) && self.1 < sx.max(ex)
-        }
-        
-        false
-    }
+enum Direction {
+    Right,
+    Down
 }
 
 impl Grid {
-    fn min_max(&self) -> ((usize, usize), (usize, usize)) {
-        let mut a: Vec<&(usize, usize)> = self.tile_paths.iter().collect();
-        a.sort_by(|a, b| a.1.cmp(&b.1));
-        let x = (
-            a.first().unwrap().1,
-            a.last().unwrap().1
-        );
-
-        a.sort_by(|a,b| a.0.cmp(&b.0));
-
-        (
-            x,
-            (
-                a.first().unwrap().0,
-                a.last().unwrap().0
-            )
-        )
-    }
-
-    fn map_boundaries(&self) -> HashMap<usize, Vec<RangeInclusive<usize>>> {
-        let mut hm = HashMap::new();
-        for (x, y) in self.tiles.iter() {
-            
-        }
-        hm
-    }
-
-    fn get_all_edges(&self, min_max: (usize, usize), y: usize) -> Vec<RangeInclusive<usize>> {
-        let mut edges = vec![];
-        let (mut start, mut end) = min_max;
-        let mut within_range = false;
-        println!("{:?}", self.tiles);
-        for x in start..=end {
-            println!("{x}, {y} {within_range}");
-            if self.tiles.contains(&(x, y)) && self.tiles.contains(&(x + 1, y)) {
-                continue;
-            }
-            
-            if self.tiles.contains(&(x, y)) {
-                if within_range {
-                    edges.push(start..=end);
-                } else {
-                    start = y;
-                }
-                within_range = !within_range;
-            }
-        }
-        edges
-    }
-
     fn path(&self, bounds: [(usize, usize); 4]) -> Vec<(usize, usize)> {
         let mut p = vec![];
         let mut i = 0;
@@ -110,19 +63,19 @@ impl Grid {
                 }
                 let size = area(&rx, &rs).unwrap();
                 let mut bounds = [**rx, (rx.0, rs.1), **rs, (rs.0, rx.1)];
-                println!("bounds before sort: {bounds:?}");
+                // println!("bounds before sort: {bounds:?}");
                 bounds.sort_by(|a,b| {
                     match a.1.cmp(&b.1) {
                         Ordering::Equal => a.0.cmp(&b.0),
                         other => other
                     }
                 });
-                println!("bounds after sort {bounds:?}");
+
                 points.push(([bounds[0], bounds[1], bounds[3], bounds[2]], size));
+                // println!("cobbled together {:?} candidates", [bounds[0], bounds[1], bounds[3], bounds[2]]);
             }
         }
 
-        println!("cobbled together {} candidates", points.len());
 
         points.sort_by(|a, b| {
             a.1.cmp(&b.1)
@@ -134,32 +87,96 @@ impl Grid {
         points
     }
 
-    fn contains(&self, origin: &(usize, usize), max: &usize) -> usize {
-        let mut point = *origin;
-        let mut count = 0;
-        // println!("checking containment for point: {origin:?}");
-        if self.tiles.contains(&origin) {
-            return 1
+    fn find_contained_point(&self, max: usize) -> Option<(usize, usize)> {
+        for k in self.tile_paths.iter() {
+            let mut pt = (k.0 + 1, k.1);
+
+            // loop {
+            //     if self.tiles.contains(&pt) {
+            //         pt = (pt.0 + 1, pt.1);
+            //     } else if self.contains(&pt, &max) {
+            //         println!("{pt:?} found");
+            //         return Some(pt);
+            //     } else {
+            //         break
+            //     }
+            // }
         }
 
-        loop {
-            if point.0 > *max {
-                break;
+        return None
+    }
+
+    fn flood_fill(&mut self, origin: &(usize, usize)) {
+        // let pt = *origin;
+        let mut stack = vec![*origin];
+        while let Some(pt) = stack.pop() {
+            if self.tiles.contains(&pt) {
+                continue;
             }
 
-            while self.tiles.contains(&point) && self.tiles.contains(&(point.0 + 1, point.1)) {
-                point = (point.0 + 1, point.1);
+            // println!("size: {}", self.tiles.len());
+            self.tiles.insert(pt);
+
+            let adj_pts = [
+                (pt.0 - 1, pt.1),
+                (pt.0 + 1, pt.1),
+                (pt.0, pt.1 - 1),
+                (pt.0, pt.1 + 1)
+            ];
+
+            for p in adj_pts {
+                if !self.tiles.contains(&p) {
+                    stack.push(p);
+                }
+            }
+        }
+    }
+
+    fn contains(&self, origin: &(usize, usize), limit: &usize, modifier: (isize, isize)) -> bool {
+        let mut point = *origin;
+        let mut count = 0;
+
+        if self.tiles.contains(&point) {
+            point = ((point.0 as isize + modifier.0) as usize, (point.1 as isize + modifier.1) as usize);
+            // println!("from: {origin:?} to: {point:?}");
+            // return true
+        }
+
+        let show_me = true; // origin == &(2, 3);
+
+        loop {
+
+            if show_me {
+                println!("help : {point:?} count : {count} limit: {limit}");
+            }
+
+            match modifier {
+                (0, -1) => if point.1 < *limit { break },
+                (0, 1) => if point.1 > *limit { break },
+                (-1, 0) => if point.0 < *limit { break },
+                _ => if point.0 > *limit { break }
+            }
+
+            let update_pt = match modifier {
+                (0, -1) => |p: &(usize, usize)| { (p.0, p.1 - 1) },
+                (0, 1) => |p: &(usize, usize)| { (p.0, p.1 + 1) },
+                (1, 0) => |p: &(usize, usize)| { (p.0 + 1, p.1) },
+                _ => |p: &(usize, usize)| { (p.0 - 1, p.1) }
+            };
+
+            while self.tiles.contains(&point) && self.tiles.contains(&update_pt(&point)) {
+                point = update_pt(&point);
             }
 
             if self.tiles.contains(&point) {
                 count += 1;
             }
             
-            point = (point.0 + 1, point.1);
+            point = update_pt(&point);
         }
         // println!("point {origin:?} crossed {} tiles", count);
 
-        count
+        count % 2 != 0
     }
 }
 
@@ -210,7 +227,6 @@ impl Debug for Grid {
 fn area(coord_a: &(usize, usize), coord_b: &(usize, usize)) -> Option<usize> {
     let height = coord_a.0.abs_diff(coord_b.0) + 1;
     let width = coord_a.1.abs_diff(coord_b.1) + 1;
-    let r = 1..3;
 
     Some(height * width)
 }
@@ -277,7 +293,7 @@ pub fn solve_part_one(data: &str) -> usize {
     let mut max = 0;
     for a in hs.tiles.iter() {
         for b in hs.tiles.iter() {
-            match area(a, b) { 
+            match area(a, b) {
                 Some(v) => {
                     if v > max {
                         max = v;
@@ -292,11 +308,7 @@ pub fn solve_part_one(data: &str) -> usize {
 }
 
 pub fn solve_part_two(data: &str) -> usize {
-    let mut grid = parse_input(data);
-    let max = grid
-        .tile_paths
-        .iter()
-        .max_by(|a,b| a.0.cmp(&b.0)).unwrap().0;
+
     0
 }
 
@@ -325,11 +337,33 @@ mod tests {
     }
 
     #[test]
-    fn test_sort() {
-        let mut bounds = [(1, 1), (10, 1), (10, 10), (1, 10)];
-        let grid = parse_input(SAMPLE_DATA);
-        let hm = grid.map_boundaries();
-        println!("{grid:?}");
+    fn test_contains() {
+        let mut grid = parse_input(SAMPLE_DATA);
+        // for c in [(9, 5), (2, 5), (2, 3), (9, 3)] {
+        //     grid.tiles.insert(c);
+        // }
+        println!("{:?}", grid.tiles);
 
+        let pt = grid.find_contained_point(12);
+        match pt {
+            Some(p) => {
+                grid.flood_fill(&p);
+            },
+            None => {}
+        }
+        // println!("{pt:?}");
+        // for c in [(9, 5), (2, 5), (2, 3), (9, 3)].iter() {
+        //     if !grid.contains(c, &12) {
+        //         println!("{c:?}");
+        //     }
+        // }
+
+        println!("{grid:?}");
+        // grid.tiles.insert((5, 7));
+        // for c in grid.candidates() {
+        //     let path = grid.path(c.0);
+        //     if path.iter().all(|c| grid.contains(origin, max))
+        // }
+        // assert!(grid.contains(&(2, 3)));
     }
 }
