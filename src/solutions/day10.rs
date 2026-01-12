@@ -69,25 +69,75 @@ impl Debug for Machine {
 
 impl Machine {
     fn measure_joltage(&self) -> Option<u32> {
-        let mut grid: Vec<Vec<u32>> = vec![];
-        let mut sum = 0;
-        for i in 0..self.size as u32 {
-            let mut row: Vec<u32> = vec![];
-            for btn in self.buttons.iter() {
-                if btn.contains(&i) {
-                    row.push(1);
-                    sum += 1;
-                } else {
-                    row.push(0);
-                }
+        // Brute force with monotonic total search
+        // Try all combinations with total presses = 0, 1, 2, ...
+        let max_total = 100;
+        
+        for total in 0..=max_total {
+            // Try all combinations of button presses that sum to 'total'
+            if let Some(presses) = self.find_solution_with_total(total) {
+                return Some(presses);
             }
-
-            grid.push(row);
         }
-
-        println!("{:?}", grid);
-
-        Some(sum as u32)
+        None
+    }
+    
+    fn find_solution_with_total(&self, target_total: u32) -> Option<u32> {
+        fn search(
+            buttons: &[Vec<u32>],
+            requirements: &[u32],
+            button_presses: &mut Vec<u32>,
+            target_total: u32,
+            current_sum: u32,
+            button_idx: usize,
+        ) -> bool {
+            // If we've assigned all buttons
+            if button_idx == buttons.len() {
+                if current_sum > target_total {
+                    return false;
+                }
+                // Fill remaining with zeros
+                while button_presses.len() < buttons.len() {
+                    button_presses.push(0);
+                }
+                
+                // Check if requirements are satisfied
+                for i in 0..requirements.len() {
+                    let mut sum = 0u32;
+                    for (btn_idx, btn) in buttons.iter().enumerate() {
+                        if btn.contains(&(i as u32)) {
+                            sum += button_presses[btn_idx];
+                        }
+                    }
+                    if sum != requirements[i] {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            // Try different press counts for current button
+            for presses in 0..=(target_total - current_sum) {
+                // Pruning: if we can't possibly reach target with remaining buttons, skip
+                if current_sum + presses > target_total {
+                    break;
+                }
+                
+                button_presses.push(presses);
+                if search(buttons, requirements, button_presses, target_total, current_sum + presses, button_idx + 1) {
+                    return true;
+                }
+                button_presses.pop();
+            }
+            false
+        }
+        
+        let mut button_presses = vec![];
+        if search(&self.buttons, &self.joltage_requirements, &mut button_presses, target_total, 0, 0) {
+            Some(target_total)
+        } else {
+            None
+        }
     }
 
 
